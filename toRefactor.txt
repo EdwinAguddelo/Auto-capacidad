@@ -1,0 +1,118 @@
+capacidadresources = "D:/AutomatizacionIndicadorespynb-master-parte3/resources/Capacidad.xls"
+consolidadoresources  = "D:/AutomatizacionIndicadorespynb-master-parte3/resources/consolidadoCapacidad.xlsx"
+datCapacidad = pd.read_excel(capacidadresources)
+consolidadodt = pd.read_excel(consolidadoresources)
+meses = { 0 : 'Diciembre', 1 : 'Enero', 2: 'Febrero',3:'Marzo',
+         4:'Abril',5:'Mayo',6:'Junio',7:'Julio',8:'Agosto',9:'Septiembre',
+         10:'Octubre',11:'Noviembre',12:'Diciembre' }
+year = max(datCapacidad['FECHA DE NOVEDAD'])
+year = year.split('-')[0]
+mes = 10
+mesAnterior = mes - 1
+proveedor = datCapacidad['PROVEEDOR']
+proveedorList = []
+for i in range(len(proveedor)):
+    proveedor[i] = proveedor[i].split(' ')[0]   
+   
+for prov in proveedor:
+     if prov not in proveedorList:
+        proveedorList.append(prov)
+
+equipo = datCapacidad['EQUIPO']
+equipoList = []
+for team in equipo:
+     if team not in equipoList:
+        equipoList.append(team)
+
+DataFrameToAppend = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO','TESTERS FIN','PROM MES','JUNIOR','SEMI-SENIOR','SENIOR'])
+#testers inicio
+InicioMes = consolidadodt[consolidadodt['MES'] == meses[mesAnterior]] 
+dtLista = []
+for prov in proveedorList:
+    filtroProv = InicioMes[InicioMes['PROVEEDOR'] == prov ]    
+    dtLista.append(filtroProv)
+    
+dtfiltradoss = []
+for dt in dtLista:      
+    for team in equipoList:
+        equipo = team        
+        filtrototall = dt[dt.EQUIPO == team]       
+        dtfiltradoss.append(filtrototall)
+listaTI = []
+for dt in dtfiltradoss:       
+    intento = dt.loc[:'TESTERS FIN']
+    del intento['AÑO']
+    del intento['MES']
+    del intento['TESTERS INICIO']
+    del intento['PROM MES']
+    del intento['ROTARON']
+    del intento['JUNIOR']
+    del intento['SEMI-SENIOR']
+    del intento['SENIOR']
+    intento.insert(0,'AÑO',year)
+    intento.insert(1,'MES',[meses[mes]])
+    intento = intento.rename(columns={'TESTERS FIN': 'TESTERS INICIO'})    
+    listaTI.append(intento)
+listaTIToappended = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO'])        
+for li in listaTI:
+    listaTIToappended = listaTIToappended.append(li, ignore_index=True)
+#testers final y promedio del mes
+dtList = []
+for prov in proveedorList:
+    filtroProv = datCapacidad[datCapacidad['PROVEEDOR'] == prov ]    
+    dtList.append(filtroProv)
+
+dtfiltrados = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO','TESTERS FIN']) 
+for dt in dtList:
+    proveedor = max(dt['PROVEEDOR'])    
+    for team in equipoList:                
+        filtrototal = dt[(dt.EQUIPO == team) & (dt.ESTADO == 'A')]        
+        dataFrame = listaTIToappended[listaTIToappended['PROVEEDOR'] == proveedor]
+        equipofilter = dataFrame[dataFrame['EQUIPO'] == team].copy()        
+        equipofilter['TESTERS FIN'] = len(filtrototal)
+        rotaron = (equipofilter.loc[:,'TESTERS FIN'] + equipofilter.loc[:,'TESTERS INICIO'])/2        
+        equipofilter.insert(6,'PROM MES',rotaron)        
+        dtfiltrados = dtfiltrados.append(equipofilter, ignore_index=True,sort=False)
+
+#rotaron
+dtfiltradox = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO','TESTERS FIN','PROM MES','ROTARON'])
+for dt in dtList:
+    proveedor = max(dt['PROVEEDOR'])  
+    for team in equipoList:     
+        filtroto = dt[(dt.EQUIPO == team) & (dt.ESTADO == 'R') & ((dt.NOVEDAD == 'RETIRO POR RENUNCIA') | (dt.NOVEDAD == 'RETIRO POR DESEMPEÑO') | (dt.NOVEDAD == 'RETIRO POR CAMBIO DE ROL'))]
+        dataFram = dtfiltrados[dtfiltrados['PROVEEDOR'] == proveedor]
+        equipofiltered = dataFram[dataFram['EQUIPO'] == team].copy()
+        equipofiltered['ROTARON'] = len(filtroto)
+        dtfiltradox = dtfiltradox.append(equipofiltered, ignore_index = True)
+#junior
+dtfiltrado = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO','TESTERS FIN','PROM MES','ROTARON','JUNIOR'])
+for dt in dtList:
+    proveedor = max(dt['PROVEEDOR'])  
+    for team in equipoList:        
+        filtro = dt[(dt.EQUIPO == team) & (dt.ESTADO == 'A') & (dt.PERFIL == 'Junior') ]
+        dtproveedor = dtfiltradox[dtfiltradox['PROVEEDOR'] == proveedor]
+        dtequipo = dtproveedor[dtproveedor['EQUIPO'] == team].copy()
+        dtequipo['JUNIOR'] = len(filtro)
+        dtfiltrado = dtfiltrado.append(dtequipo, ignore_index = True)
+#semi-senior
+dtfilt = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO','TESTERS FIN','PROM MES','ROTARON','JUNIOR','SEMI-SENIOR'])
+for dt in dtList:
+    proveedor = max(dt['PROVEEDOR'])  
+    for team in equipoList:        
+        filt = dt[(dt.EQUIPO == team) & (dt.ESTADO == 'A') & (dt.PERFIL == 'Semi-Senior') ]
+        proveedordt = dtfiltrado[dtfiltrado['PROVEEDOR'] == proveedor]
+        equipodt = proveedordt[proveedordt['EQUIPO'] == team].copy()
+        equipodt['SEMI-SENIOR'] = len(filt)
+        dtfilt = dtfilt.append(equipodt, ignore_index = True)
+#Senior
+dtfil = pd.DataFrame(columns=['AÑO','MES','PROVEEDOR','EQUIPO','TESTERS INICIO','TESTERS FIN','PROM MES','ROTARON','JUNIOR','SEMI-SENIOR','SENIOR'])
+for dt in dtList:
+    proveedor = max(dt['PROVEEDOR'])  
+    for team in equipoList:
+        equipo = team        
+        fil = dt[(dt.EQUIPO == team) & (dt.ESTADO == 'A') & (dt.PERFIL == 'Senior') ]
+        proveedordata = dtfilt[dtfilt['PROVEEDOR'] == proveedor]
+        equipodata = proveedordata[proveedordata['EQUIPO'] == team].copy()
+        equipodata['SENIOR'] = len(fil)
+        dtfil = dtfil.append(equipodata, ignore_index = True)  
+consolidadodt = consolidadodt.append(dtfil,ignore_index = True)
